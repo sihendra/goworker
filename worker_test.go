@@ -1,4 +1,4 @@
-package worker
+package goworker
 
 import (
 	"testing"
