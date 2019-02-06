@@ -32,13 +32,14 @@ func NewMemoryQueue(length int) Queue {
 }
 
 func (m *memQueue) Push(entry interface{}, timeout time.Duration) error {
-	timeoutReached := time.After(timeout)
+	//timeoutReached := time.After(timeout)
 	select {
 	case m.storage <- entry:
 	case <-m.close:
 		close(m.storage)
-	case <-timeoutReached:
-		return errors.New("timeout while pushing to queue")
+		// TODO: implement queue full policy
+		//case <-timeoutReached:
+		//	return errors.New("timeout while pushing to queue")
 	}
 
 	return nil
