@@ -1,11 +1,11 @@
 package goworker
 
 import (
-	"time"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
-	"errors"
+	"time"
 )
 
 type Queue interface {
@@ -13,7 +13,6 @@ type Queue interface {
 	Pop(timeout time.Duration) (interface{}, error)
 	Channel() chan interface{}
 }
-
 
 // MemoryQueue
 type memQueue struct {
@@ -31,7 +30,6 @@ func NewMemoryQueue(length int) Queue {
 
 	return q
 }
-
 
 func (m *memQueue) Push(entry interface{}, timeout time.Duration) error {
 	timeoutReached := time.After(timeout)
