@@ -13,6 +13,8 @@ type (
 		Push(entry interface{}, timeout time.Duration) error
 		Pop(timeout time.Duration) (interface{}, error)
 		Channel() chan interface{}
+		Acknowledge(message interface{})
+		Shutdown() error
 	}
 
 	QueueManager struct {
@@ -69,6 +71,8 @@ func (q *QueueManager) Push(queueItem QueueItem) error {
 						QueueName: name,
 						Item:      item,
 					}
+
+					queue.Acknowledge(item)
 				case <-q.shutdown:
 					break
 				}
