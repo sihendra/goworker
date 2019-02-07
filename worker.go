@@ -1,32 +1,44 @@
 package goworker
 
 import (
-	"time"
+	"errors"
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
-	"log"
-	"fmt"
+	"time"
 )
 
 type Worker interface {
-	Dispatch(job Job) error
+	Dispatch(job Job, item interface{}, queueName string) error
 	Start() error
 	Stop() error
 }
 
 type Job interface {
-	Handle() error
+	Handle(item interface{}) error
 }
 
+type worker struct {
+	queueManager *QueueManager
+	jobRegistry  map[string]Job
+	timeout      time.Duration
+	count        int
+	shutdown     chan os.Signal
+	sync         sync.Mutex
+}
 
 // Worker
-func NewWorker(queue Queue, workerCount int) Worker {
+func NewWorker(queue *QueueManager, workerCount int) Worker {
 	w := &worker{
-		queue:    queue,
-		timeout:  2 * time.Second,
-		count:    workerCount,
-		shutdown: make(chan os.Signal),
+		queueManager: queue,
+		jobRegistry:  make(map[string]Job),
+		timeout:      2 * time.Second,
+		count:        workerCount,
+		shutdown:     make(chan os.Signal),
+		sync:         sync.Mutex{},
 	}
 
 	signal.Notify(w.shutdown, syscall.SIGTERM)
@@ -34,19 +46,13 @@ func NewWorker(queue Queue, workerCount int) Worker {
 	return w
 }
 
-type worker struct {
-	queue    Queue
-	timeout  time.Duration
-	count    int
-	shutdown chan os.Signal
-}
-
 func (w *worker) Start() error {
 	for i := 1; i <= w.count; i++ {
+		threadName := fmt.Sprintf("Thread #%d", i)
 		go func(name string) {
 			for {
 				select {
-				case item := <-w.queue.Channel():
+				case item := <-w.queueManager.Fetch():
 					err := w.process(name, item)
 					if err != nil {
 						w.logThread(name, err.Error())
@@ -56,7 +62,7 @@ func (w *worker) Start() error {
 				}
 			}
 
-		}(fmt.Sprintf("Thread #%d", i))
+		}(threadName)
 	}
 	return nil
 }
@@ -66,24 +72,47 @@ func (w *worker) Stop() error {
 	return nil
 }
 
-func (w *worker) Dispatch(job Job) error {
-	return w.queue.Push(job, w.timeout)
+func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
+	w.sync.Lock()
+	defer w.sync.Unlock()
+
+	_, ok := w.jobRegistry[queueName]
+	if !ok {
+		w.jobRegistry[queueName] = job
+	}
+
+	return w.queueManager.Push(QueueItem{
+		QueueName: queueName,
+		Item:      item,
+	})
 }
 
-func (w *worker) process(threadName string, item interface{}) error {
-	job, ok := item.(Job)
+func (w *worker) process(threadName string, queueItem QueueItem) (err error) {
+	defer func(error) {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = errors.New(x)
+			case error:
+				err = x
+			default:
+				err = errors.New("unknown error while processing")
+			}
+		}
+	}(err)
+
+	item := queueItem.Item
+
+	job, ok := w.jobRegistry[queueItem.QueueName]
 	if !ok {
-		return fmt.Errorf("expect a Job type got: %T", item)
+		return fmt.Errorf("no handler for queue %s", queueItem.QueueName)
 	}
 
 	w.logThread(threadName, "Processing %T", item)
 
-	return job.Handle()
-
-	return nil
+	return job.Handle(item)
 }
 
 func (w *worker) logThread(name string, message string, params ...interface{}) {
 	log.Printf("[%s] %s - | %s\n", name, time.Now().Format(time.RFC3339), fmt.Sprintf(message, params...))
 }
-

@@ -1,11 +1,11 @@
 package goworker
 
 import (
-	"testing"
-	"time"
-	"runtime"
 	"fmt"
 	"path/filepath"
+	"runtime"
+	"testing"
+	"time"
 )
 
 func TestMemQueue_Push(t *testing.T) {

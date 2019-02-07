@@ -1,29 +1,36 @@
 package goworker
 
 import (
-	"testing"
-	"fmt"
-	"time"
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"strings"
+	"testing"
+	"time"
 )
 
 type dummyJob struct {
-
 }
 
-func (dummyJob) Handle() error {
-	fmt.Printf("Hello World!\n")
+func (dummyJob) Handle(item interface{}) error {
+	fmt.Printf("Dummy: Hello World!\n")
+	return nil
+}
+
+type dummyJob2 struct {
+}
+
+func (dummyJob2) Handle(item interface{}) error {
+	fmt.Printf("Dummy2: Hello World!\n")
 	return nil
 }
 
 func TestWorker_Start(t *testing.T) {
 
-	output := captureOutput(func(){
-		queue := NewMemoryQueue(10)
-		w := NewWorker(queue, 4)
+	output := captureOutput(func() {
+		queueManager := NewQueueManager(NewMemoryQueueFactory(10))
+		w := NewWorker(queueManager, 1)
 		defer w.Stop()
 
 		err := w.Start()
@@ -31,11 +38,11 @@ func TestWorker_Start(t *testing.T) {
 			t.Fatalf("Failed starting worker: %s", err.Error())
 		}
 
-		var job Job
-		job = &dummyJob{}
+		job := &dummyJob{}
+		job2 := &dummyJob2{}
 
-		w.Dispatch(job)
-		w.Dispatch(job)
+		w.Dispatch(job, "something", "q1")
+		w.Dispatch(job2, "something", "q2")
 
 		time.Sleep(time.Second * 1)
 	})
