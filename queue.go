@@ -1,70 +1,84 @@
 package goworker
 
 import (
-	"errors"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
 
-type Queue interface {
-	Push(entry interface{}, timeout time.Duration) error
-	Pop(timeout time.Duration) (interface{}, error)
-	Channel() chan interface{}
-}
-
-// MemoryQueue
-type memQueue struct {
-	storage chan interface{}
-	close   chan os.Signal
-}
-
-func NewMemoryQueue(length int) Queue {
-	q := &memQueue{
-		storage: make(chan interface{}, length),
-		close:   make(chan os.Signal),
+type (
+	Queue interface {
+		Push(entry interface{}, timeout time.Duration) error
+		Pop(timeout time.Duration) (interface{}, error)
+		Channel() chan interface{}
 	}
 
-	signal.Notify(q.close, syscall.SIGTERM)
-
-	return q
-}
-
-func NewMemoryQueueFactory(length int) QueueFactory {
-	return func(name string) (queue Queue, e error) {
-		return NewMemoryQueue(length), nil
-	}
-}
-
-func (m *memQueue) Push(entry interface{}, timeout time.Duration) error {
-	//timeoutReached := time.After(timeout)
-	select {
-	case m.storage <- entry:
-	case <-m.close:
-		close(m.storage)
-		// TODO: implement queueManager full policy
-		//case <-timeoutReached:
-		//	return errors.New("timeout while pushing to queueManager")
+	QueueManager struct {
+		queues         map[string]Queue
+		fetchChannel   chan QueueItem
+		sync           sync.Mutex
+		createNewQueue QueueFactory
+		shutdown       chan os.Signal
 	}
 
-	return nil
-}
+	QueueFactory func(name string) (Queue, error)
 
-func (m *memQueue) Pop(timeout time.Duration) (interface{}, error) {
-	timeoutReached := time.After(timeout)
-	select {
-	case e := <-m.storage:
-		return e, nil
-	case <-m.close:
-		close(m.storage)
-	case <-timeoutReached:
-		return nil, errors.New("timeout while poping queueManager")
+	QueueItem struct {
+		QueueName string
+		Item      interface{}
+	}
+)
+
+func NewQueueManager(factory QueueFactory) *QueueManager {
+
+	qm := &QueueManager{
+		queues:         make(map[string]Queue),
+		fetchChannel:   make(chan QueueItem),
+		sync:           sync.Mutex{},
+		createNewQueue: factory,
+		shutdown:       make(chan os.Signal),
 	}
 
-	return nil, nil
+	signal.Notify(qm.shutdown, syscall.SIGTERM)
+
+	return qm
 }
 
-func (m *memQueue) Channel() chan interface{} {
-	return m.storage
+func (q *QueueManager) Push(queueItem QueueItem) error {
+	q.sync.Lock()
+	defer q.sync.Unlock()
+
+	name := queueItem.QueueName
+	item := queueItem.Item
+
+	_, ok := q.queues[name]
+	if !ok {
+		newQueue, err := q.createNewQueue(name)
+		if err != nil {
+			return err
+		}
+		q.queues[name] = newQueue
+
+		go func(name string, queue Queue) {
+			for {
+				select {
+				case item := <-queue.Channel():
+					q.fetchChannel <- QueueItem{
+						QueueName: name,
+						Item:      item,
+					}
+				case <-q.shutdown:
+					break
+				}
+			}
+		}(name, q.queues[name])
+	}
+
+	return q.queues[name].Push(item, 0)
+}
+
+func (q *QueueManager) Fetch() chan QueueItem {
+	return q.fetchChannel
 }
