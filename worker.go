@@ -108,7 +108,7 @@ func (w *worker) process(threadName string, queueItem QueueItem) (err error) {
 		return fmt.Errorf("no handler for queue %s", queueItem.QueueName)
 	}
 
-	w.logThread(threadName, "Processing %T", item)
+	w.logThread(threadName, "Processing %s", queueItem.QueueName)
 
 	return job.Handle(item)
 }
