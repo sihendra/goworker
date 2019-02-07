@@ -104,6 +104,7 @@ func (m *redisQueue) startListener() {
 			if err != nil {
 				if err.Error() != "redigo: nil returned" {
 					fmt.Printf("error while listening redis queue %s: %s\n", m.queueName, err.Error())
+					<-time.After(1 * time.Second)
 				}
 			} else {
 				m.dataChannel <- message
