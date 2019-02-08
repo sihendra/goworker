@@ -15,13 +15,13 @@ func TestMemQueue_Push(t *testing.T) {
 
 	items := []string{"Item1", "Item2", "Item3", "Item4"}
 
-	err := queue.Push(items[0], time.Second)
+	err := queue.Push([]byte(items[0]), time.Second)
 	require.NoError(t, err)
 
 	item, err := queue.Pop(time.Second)
 	require.NoError(t, err)
 
-	require.True(t, item == items[0], "Expected: %s, got: %s", items[0], item)
+	require.True(t, string(item) == items[0], "Expected: %s, got: %s", items[0], item)
 
 }
 
@@ -30,13 +30,13 @@ func TestMemQueue_Pop(t *testing.T) {
 
 	items := []string{"Item1"}
 
-	err := queue.Push(items[0], time.Second)
+	err := queue.Push([]byte(items[0]), time.Second)
 	require.NoError(t, err)
 
 	item, err := queue.Pop(time.Second)
 	require.NoError(t, err)
 
-	require.True(t, item == items[0], "Expected: %s, got: %s", items[0], item)
+	require.True(t, string(item) == items[0], "Expected: %s, got: %s", items[0], item)
 
 	item2, err := queue.Pop(time.Second)
 
@@ -74,9 +74,15 @@ func TestRedisQueue_Channel(t *testing.T) {
 	require.True(t, queue.Channel() != nil, "Expected channel not nil, got nil")
 
 	// Populate Queue
-	queue.Push([]string{"1"}, 0)
-	queue.Push([]string{"2"}, 0)
-	queue.Push([]string{"3"}, 0)
+	payload1, err := json.Marshal([]string{"1"})
+	require.NoError(t, err)
+	payload2, err := json.Marshal([]string{"1"})
+	require.NoError(t, err)
+	payload3, err := json.Marshal([]string{"1"})
+	require.NoError(t, err)
+	queue.Push(payload1, 0)
+	queue.Push(payload2, 0)
+	queue.Push(payload3, 0)
 
 	// Check data in channel
 	go func() {
@@ -89,12 +95,11 @@ func TestRedisQueue_Channel(t *testing.T) {
 	i := 0
 	for v := range queue.Channel() {
 		var tmp []string
-		bytes, ok := v.(string)
-		require.True(t, ok)
-		json.Unmarshal([]byte(bytes), &tmp)
+		err = json.Unmarshal(v, &tmp)
+		require.NoError(t, err)
 		require.Len(t, tmp, 1)
 
-		queue.Acknowledge(bytes)
+		queue.Acknowledge(v)
 		i++
 	}
 	require.Equal(t, 3, i)

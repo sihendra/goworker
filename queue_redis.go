@@ -1,7 +1,6 @@
 package goworker
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"os"
@@ -13,7 +12,7 @@ import (
 type redisQueue struct {
 	pool        *redis.Pool
 	queueName   string
-	dataChannel chan interface{}
+	dataChannel chan []byte
 	close       chan os.Signal
 }
 
@@ -22,7 +21,7 @@ func NewRedisQueue(name string, pool *redis.Pool) Queue {
 		pool:        pool,
 		queueName:   name,
 		close:       make(chan os.Signal),
-		dataChannel: make(chan interface{}),
+		dataChannel: make(chan []byte),
 	}
 
 	signal.Notify(q.close, syscall.SIGTERM)
@@ -38,16 +37,11 @@ func NewRedisQueueFactory(pool *redis.Pool) QueueFactory {
 	}
 }
 
-func (m *redisQueue) Push(entry interface{}, timeout time.Duration) error {
+func (m *redisQueue) Push(entry []byte, timeout time.Duration) error {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	bytes, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Do("lpush", m.queueName, bytes)
+	_, err := conn.Do("lpush", m.queueName, entry)
 	if err != nil {
 		return err
 	}
@@ -55,11 +49,11 @@ func (m *redisQueue) Push(entry interface{}, timeout time.Duration) error {
 	return nil
 }
 
-func (m *redisQueue) Pop(timeout time.Duration) (interface{}, error) {
+func (m *redisQueue) Pop(timeout time.Duration) ([]byte, error) {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	message, err := redis.String(conn.Do("rpop", m.queueName, 0))
+	message, err := redis.Bytes(conn.Do("rpop", m.queueName, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -67,14 +61,14 @@ func (m *redisQueue) Pop(timeout time.Duration) (interface{}, error) {
 	return message, nil
 }
 
-func (m *redisQueue) Acknowledge(message interface{}) {
+func (m *redisQueue) Acknowledge(message []byte) {
 	conn := m.pool.Get()
 	defer conn.Close()
 
 	conn.Do("lrem", m.queueName+":processing", -1, message)
 }
 
-func (m *redisQueue) Channel() chan interface{} {
+func (m *redisQueue) Channel() chan []byte {
 	return m.dataChannel
 }
 
@@ -100,7 +94,7 @@ func (m *redisQueue) startListener() {
 			default:
 			}
 
-			message, err := redis.String(conn.Do("brpoplpush", m.queueName, m.queueName+":processing", 1))
+			message, err := redis.Bytes(conn.Do("brpoplpush", m.queueName, m.queueName+":processing", 1))
 			if err != nil {
 				if err.Error() != "redigo: nil returned" {
 					fmt.Printf("error while listening redis queue %s: %s\n", m.queueName, err.Error())

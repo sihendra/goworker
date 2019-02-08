@@ -18,7 +18,7 @@ type Worker interface {
 }
 
 type Job interface {
-	Handle(item interface{}) error
+	Handle(item QueueItem) error
 }
 
 type worker struct {
@@ -101,8 +101,6 @@ func (w *worker) process(threadName string, queueItem QueueItem) (err error) {
 		}
 	}(err)
 
-	item := queueItem.Item
-
 	job, ok := w.jobRegistry[queueItem.QueueName]
 	if !ok {
 		return fmt.Errorf("no handler for queue %s", queueItem.QueueName)
@@ -110,7 +108,7 @@ func (w *worker) process(threadName string, queueItem QueueItem) (err error) {
 
 	w.logThread(threadName, "Processing %s", queueItem.QueueName)
 
-	return job.Handle(item)
+	return job.Handle(queueItem)
 }
 
 func (w *worker) logThread(name string, message string, params ...interface{}) {

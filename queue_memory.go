@@ -10,17 +10,13 @@ import (
 
 // MemoryQueue
 type memQueue struct {
-	storage chan interface{}
+	storage chan []byte
 	close   chan os.Signal
-}
-
-func (m *memQueue) Acknowledge(message interface{}) {
-	return
 }
 
 func NewMemoryQueue(length int) Queue {
 	q := &memQueue{
-		storage: make(chan interface{}, length),
+		storage: make(chan []byte, length),
 		close:   make(chan os.Signal),
 	}
 
@@ -35,11 +31,12 @@ func NewMemoryQueueFactory(length int) QueueFactory {
 	}
 }
 
-func (m *memQueue) Push(entry interface{}, timeout time.Duration) error {
+func (m *memQueue) Push(entry []byte, timeout time.Duration) error {
 	timeoutReached := time.After(timeout)
 	if timeout == 0 {
 		timeoutReached = make(chan time.Time)
 	}
+
 	select {
 	case m.storage <- entry:
 	case <-m.close:
@@ -51,7 +48,7 @@ func (m *memQueue) Push(entry interface{}, timeout time.Duration) error {
 	return nil
 }
 
-func (m *memQueue) Pop(timeout time.Duration) (interface{}, error) {
+func (m *memQueue) Pop(timeout time.Duration) ([]byte, error) {
 	timeoutReached := time.After(timeout)
 	if timeout == 0 {
 		timeoutReached = make(chan time.Time)
@@ -68,8 +65,12 @@ func (m *memQueue) Pop(timeout time.Duration) (interface{}, error) {
 	return nil, nil
 }
 
-func (m *memQueue) Channel() chan interface{} {
+func (m *memQueue) Channel() chan []byte {
 	return m.storage
+}
+
+func (m *memQueue) Acknowledge(message []byte) {
+	return
 }
 
 func (m *memQueue) Shutdown() error {

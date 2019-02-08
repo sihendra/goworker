@@ -13,15 +13,15 @@ import (
 type dummyJob struct {
 }
 
-func (dummyJob) Handle(item interface{}) error {
-	fmt.Printf("Dummy: Hello World!\n")
+func (dummyJob) Handle(item QueueItem) error {
+	fmt.Printf("Dummy: Hello World! from queue:%s\n", item.QueueName)
 	return nil
 }
 
 type dummyJob2 struct {
 }
 
-func (dummyJob2) Handle(item interface{}) error {
+func (dummyJob2) Handle(item QueueItem) error {
 	fmt.Printf("Dummy2: Hello World!\n")
 	return nil
 }
