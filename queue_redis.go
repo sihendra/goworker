@@ -65,7 +65,7 @@ func (m *redisQueue) Acknowledge(message []byte) {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	conn.Do("lrem", m.queueName+":processing", -1, message)
+	conn.Do("lrem", m.inProgressQueueName(), -1, message)
 }
 
 func (m *redisQueue) Channel() chan []byte {
@@ -82,8 +82,31 @@ func (m *redisQueue) Shutdown() error {
 	return nil
 }
 
+func (m *redisQueue) inProgressQueueName() string {
+	return m.queueName + ":processing"
+}
+
+func (m *redisQueue) enqueueUnfinishedItems() error {
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	messages, err := redis.ByteSlices(conn.Do("lrange", m.inProgressQueueName(), 0, -1))
+	if err != nil {
+		return err
+	}
+
+	for _, v := range messages {
+		m.dataChannel <- v
+	}
+
+	return nil
+}
+
 func (m *redisQueue) startListener() {
+
 	go func() {
+		m.enqueueUnfinishedItems()
+
 		for {
 			conn := m.pool.Get()
 			defer conn.Close()
@@ -94,7 +117,7 @@ func (m *redisQueue) startListener() {
 			default:
 			}
 
-			message, err := redis.Bytes(conn.Do("brpoplpush", m.queueName, m.queueName+":processing", 1))
+			message, err := redis.Bytes(conn.Do("brpoplpush", m.queueName, m.inProgressQueueName(), 1))
 			if err != nil {
 				if err.Error() != "redigo: nil returned" {
 					fmt.Printf("error while listening redis queue %s: %s\n", m.queueName, err.Error())
