@@ -108,25 +108,33 @@ func (m *redisQueue) startListener() {
 		m.enqueueUnfinishedItems()
 
 		for {
-			conn := m.pool.Get()
-			defer conn.Close()
-
 			select {
 			case <-m.close:
 				break
 			default:
 			}
 
-			message, err := redis.Bytes(conn.Do("brpoplpush", m.queueName, m.inProgressQueueName(), 1))
-			if err != nil {
-				if err.Error() != "redigo: nil returned" {
-					fmt.Printf("error while listening redis queue %s: %s\n", m.queueName, err.Error())
-					<-time.After(1 * time.Second)
-				}
-			} else {
-				m.dataChannel <- message
-			}
-
+			m.readItem()
 		}
 	}()
+}
+
+func (m *redisQueue) readItem() error {
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	message, err := redis.Bytes(conn.Do("brpoplpush", m.queueName, m.inProgressQueueName(), 1))
+	if err != nil {
+		if err.Error() != "redigo: nil returned" {
+			fmt.Printf("error while listening redis queue %s: %s\n", m.queueName, err.Error())
+			<-time.After(1 * time.Second)
+		}
+
+		return err
+	} else {
+		m.dataChannel <- message
+	}
+
+	return nil
+
 }
