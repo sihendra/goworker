@@ -27,6 +27,7 @@ type worker struct {
 	jobRegistry  map[string]Job
 	timeout      time.Duration
 	count        int
+	started      bool
 	shutdown     chan os.Signal
 	sync         sync.Mutex
 }
@@ -48,6 +49,14 @@ func NewWorker(queue *QueueManager, workerCount int) Worker {
 }
 
 func (w *worker) Start() error {
+	w.sync.Lock()
+	if w.started {
+		return errors.New("worker has already been started")
+	} else {
+		w.started = true
+	}
+	w.sync.Unlock()
+
 	for i := 1; i <= w.count; i++ {
 		threadName := fmt.Sprintf("Thread #%d", i)
 		go func(name string) {
@@ -69,7 +78,16 @@ func (w *worker) Start() error {
 }
 
 func (w *worker) Stop() error {
+	w.sync.Lock()
+	if !w.started {
+		return errors.New("worker has not been started")
+	} else {
+		w.started = false
+	}
+	defer w.sync.Unlock()
+
 	w.shutdown <- os.Interrupt
+
 	return nil
 }
 
