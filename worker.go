@@ -13,6 +13,7 @@ import (
 
 type Worker interface {
 	Register(job Job, queueName string) error
+	Enqueue(item interface{}, queueName string) error
 	Dispatch(job Job, item interface{}, queueName string) error
 	Start() error
 	Stop() error
@@ -100,6 +101,11 @@ func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
 		w.jobRegistry[queueName] = job
 	}
 
+	err := w.queueManager.AddQueue(queueName)
+	if err != nil {
+		return err
+	}
+
 	return w.queueManager.Push(QueueItem{
 		QueueName: queueName,
 		Item:      item,
@@ -121,6 +127,13 @@ func (w *worker) Register(job Job, queueName string) error {
 	}
 
 	return nil
+}
+
+func (w *worker) Enqueue(item interface{}, queueName string) error {
+	return w.queueManager.Push(QueueItem{
+		QueueName: queueName,
+		Item:      item,
+	})
 }
 
 func (w *worker) process(threadName string, queueItem QueueItem) (err error) {

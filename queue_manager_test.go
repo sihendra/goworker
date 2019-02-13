@@ -16,6 +16,11 @@ func TestQueueManager_Fetch(t *testing.T) {
 	q1 := "queue.test-mgr-" + strconv.Itoa(rand.Intn(100))
 	q2 := "queue.test-mgr-" + strconv.Itoa(rand.Intn(100))
 	q3 := "queue.test-mgr-" + strconv.Itoa(rand.Intn(100))
+
+	queueManager.AddQueue(q1)
+	queueManager.AddQueue(q2)
+	queueManager.AddQueue(q3)
+
 	err := queueManager.Push(QueueItem{
 		QueueName: q1,
 		Item:      "Item1",

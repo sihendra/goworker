@@ -36,6 +36,9 @@ func TestWorker_Register(t *testing.T) {
 		q1 := "test.queue1-" + strconv.Itoa(rand.Intn(10))
 		q2 := "test.queue2-" + strconv.Itoa(rand.Intn(10))
 		queueManager := NewQueueManager(NewMemoryQueueFactory(10))
+		queueManager.AddQueue(q1)
+		queueManager.AddQueue(q2)
+
 		err := queueManager.Push(QueueItem{
 			QueueName: q1,
 			Item:      []string{"Item 1"},
@@ -78,6 +81,56 @@ func TestWorker_Register(t *testing.T) {
 		t.Fatalf("Expect to print 2 lines, got: %d", len(filtered))
 	}
 
+}
+
+func TestWorker_Enqueue(t *testing.T) {
+
+	output := captureOutput(func() {
+		queueManager := NewQueueManager(NewMemoryQueueFactory(10))
+		w := NewWorker(queueManager, 1)
+		defer w.Stop()
+
+		err := w.Start()
+		if err != nil {
+			t.Fatalf("Failed starting worker: %s", err.Error())
+		}
+
+		job := &dummyJob{}
+		job2 := &dummyJob2{}
+
+		w.Register(job, "q1")
+		w.Register(job2, "q2")
+
+		w.Enqueue("something", "q1")
+		w.Enqueue("something", "q2")
+
+		time.Sleep(time.Second * 1)
+	})
+
+	toks := strings.Split(output, "\n")
+	filtered := make([]string, 0)
+	for _, v := range toks {
+		if strings.TrimSpace(v) != "" {
+			filtered = append(filtered, v)
+		}
+	}
+	if len(filtered) != 2 {
+		t.Fatalf("Expect to print 2 lines, got: %d", len(filtered))
+	}
+
+}
+
+func TestWorker_Enqueue_ShouldFailOnUnregisteredQueue(t *testing.T) {
+	queueManager := NewQueueManager(NewMemoryQueueFactory(10))
+	w := NewWorker(queueManager, 1)
+	defer w.Stop()
+	err := w.Start()
+	if err != nil {
+		t.Fatalf("Failed starting worker: %s", err.Error())
+	}
+
+	err = w.Enqueue("something", "q1")
+	require.Error(t, err)
 }
 
 func TestWorker_Dispatch(t *testing.T) {

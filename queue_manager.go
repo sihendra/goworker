@@ -2,6 +2,7 @@ package goworker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -32,18 +33,26 @@ func NewQueueManager(factory QueueFactory) *QueueManager {
 	return qm
 }
 
-func (q *QueueManager) AddQueue(name string) error {
+func (q *QueueManager) IsQueueRegistered(name string) bool {
 	q.sync.Lock()
 	defer q.sync.Unlock()
 	_, ok := q.queues[name]
-	if !ok {
+	if ok {
+		return true
+	}
+
+	return false
+}
+
+func (q *QueueManager) AddQueue(name string) error {
+	if !q.IsQueueRegistered(name) {
 		newQueue, err := q.createNewQueue(name)
 		if err != nil {
 			return err
 		}
 		q.queues[name] = newQueue
 
-		q.listenQueueChannelAsync(name, newQueue)
+		q.listenQueueChannelAsync(newQueue)
 	}
 
 	return nil
@@ -53,9 +62,8 @@ func (q *QueueManager) Push(queueItem QueueItem) error {
 
 	name := queueItem.QueueName
 
-	err := q.AddQueue(name)
-	if err != nil {
-		return err
+	if !q.IsQueueRegistered(name) {
+		return errors.New("trying to push to unregistered queue")
 	}
 
 	bytes, err := queueItem.ToBytes()
@@ -69,8 +77,8 @@ func (q *QueueManager) Fetch() chan QueueItem {
 	return q.fetchChannel
 }
 
-func (q *QueueManager) listenQueueChannelAsync(name string, queue Queue) error {
-	go func(name string, queue Queue) {
+func (q *QueueManager) listenQueueChannelAsync(queue Queue) error {
+	go func(queue Queue) {
 		for {
 			select {
 			case item := <-queue.Channel():
@@ -90,7 +98,7 @@ func (q *QueueManager) listenQueueChannelAsync(name string, queue Queue) error {
 				break
 			}
 		}
-	}(name, q.queues[name])
+	}(queue)
 
 	return nil
 }
