@@ -1,6 +1,6 @@
 # GO Worker
 
-Go worker pool with flexible queue implementations. You can implement your own Queue implementation other than the default MemoryQueue.
+Go worker pool with flexible queue implementations. You can implement your own Queue implementation other than the default MemoryQueue and RedisQueue.
 
 # Install
 
@@ -9,18 +9,23 @@ Go worker pool with flexible queue implementations. You can implement your own Q
 # Usage
 
 
+    // Instantiate the worker
     queueManager := NewQueueManager(NewMemoryQueueFactory(10))
-    w := NewWorker(queueManager, 1)
+    w := NewWorker(queueManager, 5)
     defer w.Stop()
 
-    err := w.Start()
-    if err != nil {
-        t.Fatalf("Failed starting worker: %s", err.Error())
-    }
-
+    // Register the job handler
     job := &dummyJob{}
-    job2 := &dummyJob2{}
+    job2 := &dummyJob2{}        
+    w.Register(job, "queue1")
+    w.Register(job2, "queue2")
+    
+    // Enqueue the item to be processed
+    w.Enqueue(map[string]interface{}{"id":"123"}, "queue1")
+    w.Enqueue("some payload", "queue2")
 
-    w.Dispatch(job, "payload1", "q1")
-    w.Dispatch(job2, "payload2", "q2")
+    // Start working
+    w.Start()
+    
 
+    
