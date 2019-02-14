@@ -16,6 +16,7 @@ type redisQueue struct {
 	close       chan os.Signal
 }
 
+// NewRedisQueue will return In-Redis Queue implementation
 func NewRedisQueue(name string, pool *redis.Pool) Queue {
 	q := &redisQueue{
 		pool:        pool,
@@ -31,6 +32,7 @@ func NewRedisQueue(name string, pool *redis.Pool) Queue {
 	return q
 }
 
+// NewRedisQueueFactory will return the In-Redis QueueFactory implementation
 func NewRedisQueueFactory(pool *redis.Pool) QueueFactory {
 	return func(name string) (queue Queue, e error) {
 		return NewRedisQueue(name, pool), nil
@@ -131,9 +133,9 @@ func (m *redisQueue) readItem() error {
 		}
 
 		return err
-	} else {
-		m.dataChannel <- message
 	}
+
+	m.dataChannel <- message
 
 	return nil
 

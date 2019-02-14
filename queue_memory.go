@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// MemoryQueue
 type memQueue struct {
 	storage chan []byte
 	close   chan os.Signal
 }
 
+// NewMemoryQueue return In-Memory Queue implementation
 func NewMemoryQueue(length int) Queue {
 	q := &memQueue{
 		storage: make(chan []byte, length),
@@ -25,6 +25,7 @@ func NewMemoryQueue(length int) Queue {
 	return q
 }
 
+// NewMemoryQueueFactory will return In-Memory QueueFactory
 func NewMemoryQueueFactory(length int) QueueFactory {
 	return func(name string) (queue Queue, e error) {
 		return NewMemoryQueue(length), nil

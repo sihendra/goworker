@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Worker interface provides methods to manage and interact with the worker
 type Worker interface {
 	Register(job Job, queueName string) error
 	Enqueue(item interface{}, queueName string) error
@@ -29,7 +30,7 @@ type worker struct {
 	sync         sync.Mutex
 }
 
-// Worker
+// NewWorker create new instance of Worker
 func NewWorker(queue *QueueManager, workerCount int) Worker {
 	w := &worker{
 		queueManager: queue,
@@ -45,12 +46,14 @@ func NewWorker(queue *QueueManager, workerCount int) Worker {
 	return w
 }
 
+// Start will tell the worker to start fetch and listening for queue items
+// and pass it to the registered Jobs
 func (w *worker) Start() error {
 	if w.getStarted() {
 		return errors.New("worker has already been started")
-	} else {
-		w.setStarted(true)
 	}
+
+	w.setStarted(true)
 
 	for i := 1; i <= w.count; i++ {
 		threadName := fmt.Sprintf("Thread #%d", i)
@@ -72,18 +75,21 @@ func (w *worker) Start() error {
 	return nil
 }
 
+// Stop will stop all background Jobs
 func (w *worker) Stop() error {
 	if !w.getStarted() {
 		return errors.New("worker has not been started")
-	} else {
-		w.setStarted(false)
 	}
+
+	w.setStarted(false)
 
 	w.shutdown <- os.Interrupt
 
 	return nil
 }
 
+// Dispatch will do two things: registering Job to queue if not yet registered and push the item to the queue
+// It is better to call Register and then Enqueue thant Dispatch alone, since the queue item will not never get processed until the first Dispatch call occurred
 func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
 	existing := w.getJob(queueName)
 	if existing == nil {
@@ -101,6 +107,7 @@ func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
 	})
 }
 
+// Register will attach given Job to given queue
 func (w *worker) Register(job Job, queueName string) error {
 	existing := w.getJob(queueName)
 	if existing == nil {
@@ -115,6 +122,7 @@ func (w *worker) Register(job Job, queueName string) error {
 	return nil
 }
 
+// Enqueue will push item to queue with given queueName
 func (w *worker) Enqueue(item interface{}, queueName string) error {
 	return w.queueManager.Push(QueueItem{
 		QueueName: queueName,

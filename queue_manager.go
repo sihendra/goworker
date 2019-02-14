@@ -10,6 +10,7 @@ import (
 	"syscall"
 )
 
+// QueueManager manage multiple queues and fetch the item within single channel
 type QueueManager struct {
 	queues         map[string]Queue
 	fetchChannel   chan QueueItem
@@ -18,6 +19,7 @@ type QueueManager struct {
 	shutdown       chan os.Signal
 }
 
+// NewQueueManager create new instance of QueueManager
 func NewQueueManager(factory QueueFactory) *QueueManager {
 
 	qm := &QueueManager{
@@ -33,6 +35,7 @@ func NewQueueManager(factory QueueFactory) *QueueManager {
 	return qm
 }
 
+// AddQueue register queue to be fetched and listened
 func (q *QueueManager) AddQueue(name string) error {
 	existing := q.getQueue(name)
 	if existing != nil {
@@ -49,6 +52,7 @@ func (q *QueueManager) AddQueue(name string) error {
 	return q.listenQueueChannelAsync(newQueue)
 }
 
+// Push will push the item to designated queue
 func (q *QueueManager) Push(queueItem QueueItem) error {
 
 	name := queueItem.QueueName
@@ -66,6 +70,7 @@ func (q *QueueManager) Push(queueItem QueueItem) error {
 	return existing.Push(bytes, 0)
 }
 
+// Fetch will return channel to get the queue item from all queue
 func (q *QueueManager) Fetch() chan QueueItem {
 	return q.fetchChannel
 }
