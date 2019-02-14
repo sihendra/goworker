@@ -33,36 +33,29 @@ func NewQueueManager(factory QueueFactory) *QueueManager {
 	return qm
 }
 
-func (q *QueueManager) IsQueueRegistered(name string) bool {
-	q.sync.Lock()
-	defer q.sync.Unlock()
-	_, ok := q.queues[name]
-	if ok {
-		return true
-	}
-
-	return false
-}
-
 func (q *QueueManager) AddQueue(name string) error {
-	if !q.IsQueueRegistered(name) {
-		newQueue, err := q.createNewQueue(name)
-		if err != nil {
-			return err
-		}
-		q.queues[name] = newQueue
-
-		q.listenQueueChannelAsync(newQueue)
+	existing := q.getQueue(name)
+	if existing != nil {
+		return nil
 	}
 
-	return nil
+	newQueue, err := q.createNewQueue(name)
+	if err != nil {
+		return err
+	}
+
+	q.setQueue(name, newQueue)
+
+	return q.listenQueueChannelAsync(newQueue)
 }
 
 func (q *QueueManager) Push(queueItem QueueItem) error {
 
 	name := queueItem.QueueName
 
-	if !q.IsQueueRegistered(name) {
+	existing := q.getQueue(name)
+
+	if existing == nil {
 		return errors.New("trying to push to unregistered queue")
 	}
 
@@ -70,7 +63,7 @@ func (q *QueueManager) Push(queueItem QueueItem) error {
 	if err != nil {
 		return err
 	}
-	return q.queues[name].Push(bytes, 0)
+	return existing.Push(bytes, 0)
 }
 
 func (q *QueueManager) Fetch() chan QueueItem {
@@ -101,6 +94,25 @@ func (q *QueueManager) listenQueueChannelAsync(queue Queue) error {
 	}(queue)
 
 	return nil
+}
+
+func (q *QueueManager) setQueue(name string, queue Queue) {
+	q.sync.Lock()
+	defer q.sync.Unlock()
+
+	q.queues[name] = queue
+}
+
+func (q *QueueManager) getQueue(name string) Queue {
+	q.sync.Lock()
+	defer q.sync.Unlock()
+
+	queue, ok := q.queues[name]
+	if !ok {
+		return nil
+	}
+
+	return queue
 }
 
 func (q *QueueManager) toQueueItem(item interface{}) (*QueueItem, error) {
