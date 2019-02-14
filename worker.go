@@ -19,10 +19,6 @@ type Worker interface {
 	Stop() error
 }
 
-type Job interface {
-	Handle(item QueueItem) error
-}
-
 type worker struct {
 	queueManager *QueueManager
 	jobRegistry  map[string]Job
@@ -50,13 +46,11 @@ func NewWorker(queue *QueueManager, workerCount int) Worker {
 }
 
 func (w *worker) Start() error {
-	w.sync.Lock()
-	if w.started {
+	if w.getStarted() {
 		return errors.New("worker has already been started")
 	} else {
-		w.started = true
+		w.setStarted(true)
 	}
-	w.sync.Unlock()
 
 	for i := 1; i <= w.count; i++ {
 		threadName := fmt.Sprintf("Thread #%d", i)
@@ -79,13 +73,11 @@ func (w *worker) Start() error {
 }
 
 func (w *worker) Stop() error {
-	w.sync.Lock()
-	if !w.started {
+	if !w.getStarted() {
 		return errors.New("worker has not been started")
 	} else {
-		w.started = false
+		w.setStarted(false)
 	}
-	defer w.sync.Unlock()
 
 	w.shutdown <- os.Interrupt
 
@@ -93,12 +85,9 @@ func (w *worker) Stop() error {
 }
 
 func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
-	w.sync.Lock()
-	defer w.sync.Unlock()
-
-	_, ok := w.jobRegistry[queueName]
-	if !ok {
-		w.jobRegistry[queueName] = job
+	existing := w.getJob(queueName)
+	if existing == nil {
+		w.setJob(queueName, job)
 	}
 
 	err := w.queueManager.AddQueue(queueName)
@@ -113,12 +102,9 @@ func (w *worker) Dispatch(job Job, item interface{}, queueName string) error {
 }
 
 func (w *worker) Register(job Job, queueName string) error {
-	w.sync.Lock()
-	defer w.sync.Unlock()
-
-	_, ok := w.jobRegistry[queueName]
-	if !ok {
-		w.jobRegistry[queueName] = job
+	existing := w.getJob(queueName)
+	if existing == nil {
+		w.setJob(queueName, job)
 	}
 
 	err := w.queueManager.AddQueue(queueName)
@@ -150,14 +136,47 @@ func (w *worker) process(threadName string, queueItem QueueItem) (err error) {
 		}
 	}(err)
 
-	job, ok := w.jobRegistry[queueItem.QueueName]
-	if !ok {
+	job := w.getJob(queueItem.QueueName)
+	if job == nil {
 		return fmt.Errorf("no handler for queue %s", queueItem.QueueName)
 	}
 
 	w.logThread(threadName, "Processing %s", queueItem.QueueName)
 
 	return job.Handle(queueItem)
+}
+
+func (w *worker) getJob(name string) Job {
+	w.sync.Lock()
+	defer w.sync.Unlock()
+
+	job, ok := w.jobRegistry[name]
+	if !ok {
+		return nil
+	}
+
+	return job
+}
+
+func (w *worker) setJob(name string, job Job) {
+	w.sync.Lock()
+	defer w.sync.Unlock()
+
+	w.jobRegistry[name] = job
+}
+
+func (w *worker) setStarted(started bool) {
+	w.sync.Lock()
+	defer w.sync.Unlock()
+
+	w.started = started
+}
+
+func (w *worker) getStarted() bool {
+	w.sync.Lock()
+	defer w.sync.Unlock()
+
+	return w.started
 }
 
 func (w *worker) logThread(name string, message string, params ...interface{}) {
