@@ -1,8 +1,11 @@
 language: go
 
 go:
-          - 1.7
+  - 1.11
 
 script:
-          - go test -v
+  - go get
+  - go test -v
 
+services:
+  - redis-server
