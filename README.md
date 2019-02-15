@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/sihendra/goworker.svg)](https://travis-ci.org/sihendra/goworker)
+[![Build Status](https://travis-ci.org/sihendra/goworker.svg)](https://travis-ci.org/sihendra/goworker)	
+[![GoDoc](https://godoc.org/github.com/sihendra/goworker?status.png)](https://godoc.org/github.com/sihendra/goworker)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sihendra/goworker)](https://goreportcard.com/report/github.com/sihendra/goworker)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
